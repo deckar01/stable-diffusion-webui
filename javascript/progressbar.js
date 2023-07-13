@@ -142,25 +142,6 @@ function requestProgress(id_task, progressbarContainer, gallery, atEnd, onProgre
                 return;
             }
 
-
-            if (res.live_preview && gallery) {
-                rect = gallery.getBoundingClientRect();
-                if (rect.width) {
-                    livePreview.style.width = rect.width + "px";
-                    livePreview.style.height = rect.height + "px";
-                }
-
-                var img = new Image();
-                img.onload = function() {
-                    livePreview.appendChild(img);
-                    if (livePreview.childElementCount > 2) {
-                        livePreview.removeChild(livePreview.firstElementChild);
-                    }
-                };
-                img.src = res.live_preview;
-            }
-
-
             if (onProgress) {
                 onProgress(res);
             }
