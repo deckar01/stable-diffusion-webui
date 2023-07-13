@@ -621,7 +621,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
         sd_models.apply_token_merging(p.sd_model, p.get_token_merging_ratio())
 
-        res = process_images_inner(p)
+        yield from process_images_inner(p)
 
     finally:
         sd_models.apply_token_merging(p.sd_model, 0)
@@ -633,8 +633,6 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
 
                 if k == 'sd_vae':
                     sd_vae.reload_vae_weights()
-
-    return res
 
 
 def process_images_inner(p: StableDiffusionProcessing) -> Processed:
@@ -739,8 +737,27 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if p.n_iter > 1:
                 shared.state.job = f"Batch {n+1} out of {p.n_iter}"
 
+            progress = Processed(
+                p,
+                images_list=[],
+                seed=p.all_seeds[0],
+                info=infotext(),
+                comments="".join(f"{comment}\n" for comment in comments),
+                subseed=p.all_subseeds[0],
+                index_of_first_image=0,
+                infotexts=infotexts,
+            )
             with devices.without_autocast() if devices.unet_needs_upcast else devices.autocast():
-                samples_ddim = p.sample(conditioning=p.c, unconditional_conditioning=p.uc, seeds=p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, prompts=p.prompts)
+                gen = p.sample(conditioning=p.c, unconditional_conditioning=p.uc, seeds=p.seeds, subseeds=p.subseeds, subseed_strength=p.subseed_strength, prompts=p.prompts)
+                for update, result in gen:
+                    if update:
+                        preview = shared.state.set_current_image()
+                        if preview:
+                            progress.images = [preview]
+                            yield progress
+                        pass
+                    else:
+                        samples_ddim = result
 
             x_samples_ddim = [decode_first_stage(p.sd_model, samples_ddim[i:i+1].to(dtype=devices.dtype_vae))[0].cpu() for i in range(samples_ddim.size(0))]
             for x in x_samples_ddim:
@@ -843,7 +860,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
     devices.torch_gc()
 
-    res = Processed(
+    progress = Processed(
         p,
         images_list=output_images,
         seed=p.all_seeds[0],
@@ -855,9 +872,9 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
     )
 
     if p.scripts is not None:
-        p.scripts.postprocess(p, res)
+        p.scripts.postprocess(p, progress)
 
-    return res
+    yield progress
 
 
 def old_hires_fix_first_pass_dimensions(width, height):
@@ -993,10 +1010,16 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
                 raise Exception(f"could not find upscaler named {self.hr_upscaler}")
 
         x = create_random_tensors([opt_C, self.height // opt_f, self.width // opt_f], seeds=seeds, subseeds=subseeds, subseed_strength=self.subseed_strength, seed_resize_from_h=self.seed_resize_from_h, seed_resize_from_w=self.seed_resize_from_w, p=self)
-        samples = self.sampler.sample(self, x, conditioning, unconditional_conditioning, image_conditioning=self.txt2img_image_conditioning(x))
+        gen = self.sampler.sample(self, x, conditioning, unconditional_conditioning, image_conditioning=self.txt2img_image_conditioning(x))
+        for update, res in gen:
+            if update:
+                yield update, None
+            else:
+                samples = res
 
         if not self.enable_hr:
-            return samples
+            yield None, samples
+            return
 
         self.is_hr_pass = True
 
@@ -1087,7 +1110,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         self.is_hr_pass = False
 
-        return samples
+        yield None, samples
 
     def close(self):
         super().close()

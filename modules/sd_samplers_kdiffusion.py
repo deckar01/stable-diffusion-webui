@@ -275,16 +275,16 @@ class KDiffusionSampler:
         state.sampling_step = 0
 
         try:
-            return func()
+            yield from func()
         except RecursionError:
             print(
                 'Encountered RecursionError during sampling, returning last latent. '
                 'rho >5 with a polyexponential scheduler may cause this error. '
                 'You should try to use a smaller rho value instead.'
             )
-            return self.last_latent
+            yield None, self.last_latent
         except sd_samplers_common.InterruptedException:
-            return self.last_latent
+            yield None, self.last_latent
 
     def number_of_needed_noises(self, p):
         return p.steps
@@ -436,16 +436,22 @@ class KDiffusionSampler:
             extra_params_kwargs['noise_sampler'] = noise_sampler
 
         self.last_latent = x
-        samples = self.launch_sampling(steps, lambda: self.func(self.model_wrap_cfg, x, extra_args={
+
+        # PoC: repositories/k_diffusion/sampling.py was patched for this.
+        # This refactor causes too much code churn.
+        # TODO: Investigate threads/cooroutines in the event handler instead.
+        gen = self.launch_sampling(steps, lambda: self.func(self.model_wrap_cfg, x, extra_args={
             'cond': conditioning,
             'image_cond': image_conditioning,
             'uncond': unconditional_conditioning,
             'cond_scale': p.cfg_scale,
             's_min_uncond': self.s_min_uncond
-        }, disable=False, callback=self.callback_state, **extra_params_kwargs))
+        }, disable=False, **extra_params_kwargs))
+
+        for update, result in gen:
+            yield update, result
+            if update:
+                self.callback_state(update)
 
         if self.model_wrap_cfg.padded_cond_uncond:
             p.extra_generation_params["Pad conds"] = True
-
-        return samples
-

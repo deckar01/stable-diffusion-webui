@@ -154,6 +154,7 @@ function submit() {
     var id = randomId();
     localStorage.setItem("txt2img_task_id", id);
 
+    // TODO: Do this 100% in gradio
     requestProgress(id, gradioApp().getElementById('txt2img_gallery_container'), gradioApp().getElementById('txt2img_gallery'), function() {
         showSubmitButtons('txt2img', true);
         localStorage.removeItem("txt2img_task_id");

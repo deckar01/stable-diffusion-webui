@@ -60,14 +60,18 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
 
         if processed is None:
             processed = processing.process_images(p)
+        else:
+            processed = [processed]
+
+        for res in processed:
+            generation_info_js = res.js()
+
+            if opts.do_not_show_images:
+                res.images = []
+
+            yield res.images, generation_info_js, plaintext_to_html(res.info), plaintext_to_html(res.comments)
 
     shared.total_tqdm.clear()
 
-    generation_info_js = processed.js()
     if opts.samples_log_stdout:
         print(generation_info_js)
-
-    if opts.do_not_show_images:
-        processed.images = []
-
-    return processed.images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments)
