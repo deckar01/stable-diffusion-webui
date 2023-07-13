@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import hashlib
+from queue import Queue
 
 import torch
 import numpy as np
@@ -634,7 +635,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                 if k == 'sd_vae':
                     sd_vae.reload_vae_weights()
 
-    return res
+    p.events.put({'result': res})
 
 
 def process_images_inner(p: StableDiffusionProcessing) -> Processed:
@@ -879,6 +880,7 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
     def __init__(self, enable_hr: bool = False, denoising_strength: float = 0.75, firstphase_width: int = 0, firstphase_height: int = 0, hr_scale: float = 2.0, hr_upscaler: str = None, hr_second_pass_steps: int = 0, hr_resize_x: int = 0, hr_resize_y: int = 0, hr_sampler_name: str = None, hr_prompt: str = '', hr_negative_prompt: str = '', **kwargs):
         super().__init__(**kwargs)
+        self.events = Queue()
         self.enable_hr = enable_hr
         self.denoising_strength = denoising_strength
         self.hr_scale = hr_scale

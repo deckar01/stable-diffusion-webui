@@ -1,4 +1,5 @@
 from contextlib import closing
+from threading import Thread
 
 import modules.scripts
 from modules import sd_samplers, processing
@@ -59,7 +60,16 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
         processed = modules.scripts.scripts_txt2img.run(p, *args)
 
         if processed is None:
-            processed = processing.process_images(p)
+            worker = Thread(target=processing.process_images, args=(p,))
+            worker.start()
+            while True:
+                event = p.events.get()
+                p.events.task_done()
+                if 'preview' in event:
+                    yield [event['preview']], None, None, ''
+                if 'result' in event:
+                    processed = event['result']
+                    break
 
     shared.total_tqdm.clear()
 
@@ -70,4 +80,4 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
     if opts.do_not_show_images:
         processed.images = []
 
-    return processed.images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments)
+    yield processed.images, generation_info_js, plaintext_to_html(processed.info), plaintext_to_html(processed.comments)
