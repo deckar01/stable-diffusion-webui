@@ -3,7 +3,10 @@ import re
 import sys
 import time
 from collections import namedtuple
+from threading import Thread
+
 import gradio as gr
+
 from modules import paths, script_callbacks, extensions, script_loading, scripts_postprocessing, errors
 from installer import log
 
@@ -393,9 +396,10 @@ class ScriptRunner:
             return None
         parsed = p.per_script_args.get(script.title(), args[script.args_from:script.args_to])
         t0 = time.time()
-        processed = script.run(p, *parsed)
-        log.debug(f'Script run: {script.title()}:{round(time.time()-t0, 2)}s')
-        return processed
+        p.events.on_done(lambda: log.debug(f'Script run: {script.title()}:{round(time.time()-t0, 2)}s'))
+        thread = Thread(target=script.run, args=parsed)
+        thread.start()
+        return thread
 
     def process(self, p, **kwargs):
         s = []

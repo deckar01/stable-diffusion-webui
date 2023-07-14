@@ -395,7 +395,7 @@ class KDiffusionSampler:
             self.callback_state(data)
             preview = shared.state.set_current_image()
             if preview:
-                p.events.put({'preview': preview})
+                p.events.add('preview', preview)
 
         self.last_latent = x
         samples = self.launch_sampling(steps, lambda: self.func(self.model_wrap_cfg, x, extra_args={

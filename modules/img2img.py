@@ -165,13 +165,18 @@ def img2img(id_task: str, mode: int, prompt: str, negative_prompt: str, prompt_s
     if mask:
         p.extra_generation_params["Mask blur"] = mask_blur
     if is_batch:
-        process_batch(p, img2img_batch_input_dir, img2img_batch_output_dir, img2img_batch_inpaint_mask_dir, args)
-        processed = processing.Processed(p, [], p.seed, "")
+        # TODO: Thread batches
+        thread = process_batch(p, img2img_batch_input_dir, img2img_batch_output_dir, img2img_batch_inpaint_mask_dir, args)
     else:
-        processed = modules.scripts.scripts_img2img.run(p, *args)
-        if processed is None:
-            processed = processing.process_images(p)
+        thread = modules.scripts.scripts_img2img.run(p, *args)
+        if thread is None:
+            thread = processing.process_images(p)
+    for event, data in p.events:
+        if event == 'preview':
+            yield [data], None, None, ''
+        elif event == 'result':
+            processed = data
+            generation_info_js = processed.js()
+            shared.log.debug(f'Processed: {len(processed.images)} Memory: {memory_stats()} txt')
+            yield processed.images, generation_info_js, processed.info, plaintext_to_html(processed.comments)
     p.close()
-    generation_info_js = processed.js()
-    shared.log.debug(f'Processed: {len(processed.images)} Memory: {memory_stats()} img')
-    return processed.images, generation_info_js, processed.info, plaintext_to_html(processed.comments)

@@ -57,20 +57,12 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
     )
     p.scripts = modules.scripts.scripts_txt2img
     p.script_args = args
-    processed = modules.scripts.scripts_txt2img.run(p, *args)
-    if processed is None:
-        processed = processing.process_images(p)
-        worker = Thread(target=processing.process_images, args=(p,))
-        worker.start()
-        while True:
-            event = p.events.get()
-            p.events.task_done()
-            if 'preview' in event:
-                yield [event['preview']], None, None, ''
-            if 'result' in event:
-                processed = event['result']
-                break
+    thread = modules.scripts.scripts_txt2img.run(p, *args)
+    if not thread:
+        thread = Thread(target=processing.process_images, args=(p,))
+    for event, processed in p.events:
+        if event in ('preview', 'result'):
+            generation_info_js = processed.js()
+            shared.log.debug(f'Processed: {len(processed.images)} Memory: {memory_stats()} txt')
+            yield processed.images, generation_info_js, processed.info, plaintext_to_html(processed.comments)
     p.close()
-    generation_info_js = processed.js()
-    shared.log.debug(f'Processed: {len(processed.images)} Memory: {memory_stats()} txt')
-    return processed.images, generation_info_js, processed.info, plaintext_to_html(processed.comments)

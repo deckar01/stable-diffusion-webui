@@ -6,7 +6,6 @@ import random
 import inspect
 from contextlib import nullcontext
 from typing import Any, Dict, List
-from queue import Queue
 
 import torch
 import numpy as np
@@ -30,6 +29,7 @@ import modules.styles
 import modules.sd_models as sd_models
 import modules.sd_vae as sd_vae
 from modules.lora_diffusers import lora_state, unload_diffusers_lora
+from modules.events import Events
 
 
 opt_C = 4
@@ -93,6 +93,7 @@ class StableDiffusionProcessing:
     """
     def __init__(self, sd_model=None, outpath_samples=None, outpath_grids=None, prompt: str = "", styles: List[str] = None, seed: int = -1, subseed: int = -1, subseed_strength: float = 0, seed_resize_from_h: int = -1, seed_resize_from_w: int = -1, seed_enable_extras: bool = True, sampler_name: str = None, batch_size: int = 1, n_iter: int = 1, steps: int = 50, cfg_scale: float = 7.0, clip_skip: int = 1, width: int = 512, height: int = 512, restore_faces: bool = False, tiling: bool = False, do_not_save_samples: bool = False, do_not_save_grid: bool = False, extra_generation_params: Dict[Any, Any] = None, overlay_images: Any = None, negative_prompt: str = None, eta: float = None, do_not_reload_embeddings: bool = False, denoising_strength: float = 0, ddim_discretize: str = None, s_min_uncond: float = 0.0, s_churn: float = 0.0, s_tmax: float = None, s_tmin: float = 0.0, s_noise: float = 1.0, override_settings: Dict[str, Any] = None, override_settings_restore_afterwards: bool = True, sampler_index: int = None, script_args: list = None): # pylint: disable=unused-argument
 
+        self.events = Events()
         self.outpath_samples: str = outpath_samples
         self.outpath_grids: str = outpath_grids
         self.prompt: str = prompt
@@ -552,7 +553,7 @@ def process_images(p: StableDiffusionProcessing) -> Processed:
                 if k == 'sd_vae':
                     sd_vae.reload_vae_weights()
 
-    p.events.put({'result': res})
+    p.events.add('result', res, done=True)
 
 
 def process_images_inner(p: StableDiffusionProcessing) -> Processed:
@@ -890,7 +891,6 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
     def __init__(self, enable_hr: bool = False, denoising_strength: float = 0.75, firstphase_width: int = 0, firstphase_height: int = 0, hr_scale: float = 2.0, hr_upscaler: str = None, hr_second_pass_steps: int = 0, hr_resize_x: int = 0, hr_resize_y: int = 0, refiner_steps: int = 0, refiner_denoise: int = 0, refiner_prompt: str = '', refiner_negative: str = '', **kwargs):
 
         super().__init__(**kwargs)
-        self.events = Queue()
         self.enable_hr = enable_hr
         self.denoising_strength = denoising_strength
         self.hr_scale = hr_scale
